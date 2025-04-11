@@ -1,14 +1,8 @@
+import { Platform, PlatformName } from '@crosspost/types';
 import { Env } from '../../config/env.ts';
-import {
-  DeleteResult,
-  LikeResult,
-  PlatformPost,
-  PostContent,
-  PostResult,
-} from '../../infrastructure/platform/abstract/platform-post.interface.ts';
+import { DeleteResult, LikeResult, PostContent, PostResult } from '@crosspost/types';
 import { TwitterPost } from '../../infrastructure/platform/twitter/twitter-post.ts';
-import { Platform, PlatformName } from '../../types/platform.types.ts';
-import { createApiResponse, createErrorResponse } from '../../types/response.types.ts';
+import { PlatformPost } from '../../infrastructure/platform/abstract/platform-post.interface.ts';
 
 /**
  * Post Service
@@ -18,15 +12,18 @@ export class PostService {
   private platformPosts: Map<string, PlatformPost>;
   private env: Env;
 
-  constructor(env: Env) {
+  constructor(env: Env, platformPosts?: Map<string, PlatformPost>) {
     this.env = env;
-    this.platformPosts = new Map();
 
-    // Initialize with Twitter
-    this.platformPosts.set(Platform.TWITTER, new TwitterPost(env));
-
-    // Add other platforms as they become available
-    // this.platformPosts.set(Platform.LINKEDIN, new LinkedInPost(env));
+    if (platformPosts) {
+      // Use the provided platform posts map
+      this.platformPosts = platformPosts;
+    } else {
+      // For backward compatibility, create an empty map
+      // This should be removed once all code is updated to use dependency injection
+      this.platformPosts = new Map();
+      console.warn('PostService created without platformPosts map. This is deprecated.');
+    }
   }
 
   /**
@@ -177,37 +174,5 @@ export class PostService {
       console.error(`Error unliking post on ${platform}:`, error);
       throw error;
     }
-  }
-
-  /**
-   * Create a standard API response
-   * @param data The response data
-   * @param status The response status
-   * @returns A standard API response
-   */
-  createResponse(data: any): Response {
-    return new Response(JSON.stringify(createApiResponse(data)), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
-  /**
-   * Create an error response
-   * @param error The error object
-   * @param status The response status
-   * @returns An error response
-   */
-  createErrorResponse(error: any, status = 500): Response {
-    const errorMessage = error.message || 'An unexpected error occurred';
-    const errorType = error.type || 'INTERNAL_ERROR';
-
-    return new Response(
-      JSON.stringify(createErrorResponse(errorType, errorMessage, error.code, error.details)),
-      {
-        status,
-        headers: { 'Content-Type': 'application/json' },
-      },
-    );
   }
 }

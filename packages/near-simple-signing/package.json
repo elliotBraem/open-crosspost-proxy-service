@@ -1,0 +1,64 @@
+{
+  "name": "@crosspost/near-simple-signing",
+  "version": "0.1.0",
+  "description": "NEAR wallet signature generation utility for Crosspost API",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "deno_dist"
+  ],
+  "scripts": {
+    "build": "npm run build:node && npm run build:deno",
+    "build:node": "tsup src/index.ts --format cjs,esm --dts",
+    "build:deno": "denoify",
+    "clean": "rimraf dist deno_dist",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "denoify": {
+    "index": "src/index.ts",
+    "replacements": {
+      "tweetnacl": "npm:tweetnacl",
+      "bs58": "npm:bs58",
+      "borsh": "npm:borsh"
+    },
+    "out": "deno_dist"
+  },
+  "keywords": [
+    "near",
+    "wallet",
+    "signature",
+    "authentication",
+    "crosspost"
+  ],
+  "author": "Crosspost Team",
+  "license": "MIT",
+  "dependencies": {
+    "borsh": "^2.0.0",
+    "bs58": "^5.0.0",
+    "tweetnacl": "^1.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "denoify": "^1.6.17",
+    "eslint": "^8.56.0",
+    "rimraf": "^5.0.5",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

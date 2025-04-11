@@ -1,4 +1,4 @@
-import { UserProfile } from '../../../types/user-profile.types.ts';
+import { UserProfile } from '@crosspost/types';
 
 /**
  * Platform Profile Interface

@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "moduleResolution": "node",
+    "outDir": "./deno_dist",
+    "paths": {
+      "npm:*": ["./node_modules/*"]
+    }
+  }
+}

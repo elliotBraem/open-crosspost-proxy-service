@@ -1,0 +1,17 @@
+{
+  "imports": {},
+  "ports": {},
+  "entryPoints": [
+    "src/index.ts"
+  ],
+  "transformers": [
+    {
+      "find": "import\\s+type\\s+([^\\s]+)\\s+from\\s+['\"]([^'\"]+)['\"];",
+      "replace": "import type $1 from \"$2.ts\";"
+    },
+    {
+      "find": "import\\s+([^\\s]+)\\s+from\\s+['\"]([^'\"]+)['\"];",
+      "replace": "import $1 from \"$2.ts\";"
+    }
+  ]
+}

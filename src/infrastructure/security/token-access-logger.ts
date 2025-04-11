@@ -1,5 +1,5 @@
 import { Env } from '../../config/env.ts';
-import { PlatformName } from '../../types/platform.types.ts';
+import { PlatformName } from '@crosspost/types';
 import { PrefixedKvStore } from '../../utils/kv-store.utils.ts';
 
 export enum TokenOperation {
@@ -19,11 +19,10 @@ export interface TokenAccessLog {
 }
 
 export class TokenAccessLogger {
-  private logStore: PrefixedKvStore;
-
-  constructor(private env: Env) {
-    this.logStore = new PrefixedKvStore(['token_access_logs']);
-  }
+  constructor(
+    private env: Env,
+    private logStore: PrefixedKvStore,
+  ) {}
 
   /**
    * Log a token access operation

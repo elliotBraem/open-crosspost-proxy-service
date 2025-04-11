@@ -1,9 +1,9 @@
-import { PostContent } from '../infrastructure/platform/abstract/platform-post.interface.ts';
-
 /**
  * Spam Detection Utilities
  * Provides utilities for avoiding spam detection when posting to social media platforms
  */
+
+import { PostContent } from '@crosspost/types';
 
 /**
  * Add a slight variation to content to avoid duplicate content detection

@@ -1,0 +1,56 @@
+{
+  "name": "@crosspost/types",
+  "version": "0.1.0",
+  "description": "Shared type definitions for Crosspost API",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "deno_dist"
+  ],
+  "scripts": {
+    "build": "npm run build:node && npm run build:deno",
+    "build:node": "tsup src/index.ts --format cjs,esm --dts --tsconfig tsconfig.node.json",
+    "build:deno": "denoify",
+    "clean": "rimraf dist deno_dist",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "keywords": [
+    "crosspost",
+    "types",
+    "api",
+    "social-media"
+  ],
+  "author": "Crosspost Team",
+  "license": "MIT",
+  "devDependencies": {
+    "denoify": "^1.6.17",
+    "eslint": "^8.56.0",
+    "rimraf": "^5.0.5",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "denoify": {
+    "index": "src/index.ts",
+    "out": "deno_dist"
+  },
+  "dependencies": {
+    "hono": "^4.7.6",
+    "zod": "^3.24.2"
+  }
+}

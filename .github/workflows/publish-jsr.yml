@@ -1,0 +1,30 @@
+name: Publish to JSR
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  publish-jsr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v2.x
+
+      - name: Build Deno types
+        run: |
+          cd packages/types
+          npm ci
+          npm run build:deno
+
+      - name: Publish to JSR
+        run: |
+          cd packages/types
+          deno publish

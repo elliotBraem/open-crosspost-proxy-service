@@ -1,0 +1,50 @@
+{
+  "name": "@crosspost/sdk",
+  "version": "0.1.0",
+  "description": "SDK for interacting with the Crosspost API",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "npm run build:node",
+    "build:node": "tsup src/index.ts --format cjs,esm --dts",
+    "clean": "rimraf dist",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "keywords": [
+    "crosspost",
+    "sdk",
+    "api",
+    "social-media"
+  ],
+  "author": "Crosspost Team",
+  "license": "MIT",
+  "dependencies": {
+    "@crosspost/types": "^0.1.0",
+    "@crosspost/near-simple-signing": "^0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "eslint": "^8.56.0",
+    "rimraf": "^5.0.5",
+    "tsup": "^8.0.1",
+    "typescript": "^5.3.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

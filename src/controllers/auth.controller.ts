@@ -1,25 +1,29 @@
+import {
+  ApiErrorCode,
+  createEnhancedErrorResponse,
+  createErrorDetail,
+  PlatformName,
+} from '@crosspost/types';
 import { Context } from '../../deps.ts';
-import { Env, getEnv } from '../config/env.ts';
+import { Env } from '../config/env.ts';
 import { DEFAULT_CONFIG } from '../config/index.ts';
 import { AuthService } from '../domain/services/auth.service.ts';
-import { NearAuthService } from '../infrastructure/security/near-auth/near-auth.service.ts';
-import { PlatformName } from '../types/platform.types.ts';
+import { NearAuthService } from '../infrastructure/security/near-auth-service.ts';
 import { unlinkAccountFromNear } from '../utils/account-linking.utils.ts';
-import { extractAndValidateNearAuth } from '../utils/near-auth.utils.ts';
+import { BaseController } from './base.controller.ts';
 
 /**
  * Auth Controller
  * Handles HTTP requests for authentication-related operations
  */
-export class AuthController {
-  private authService: AuthService;
-  private nearAuthService: NearAuthService;
-  private env: Env;
-
-  constructor() {
-    this.env = getEnv();
-    this.authService = new AuthService(this.env);
-    this.nearAuthService = new NearAuthService(this.env);
+export class AuthController extends BaseController {
+  // Dependencies will be injected
+  constructor(
+    private authService: AuthService,
+    private nearAuthService: NearAuthService,
+    private env: Env,
+  ) {
+    super();
   }
 
   /**
@@ -31,20 +35,20 @@ export class AuthController {
   async initializeAuth(c: Context, platform: PlatformName): Promise<Response> {
     try {
       // Extract and validate NEAR auth data
-      const { signerId } = await extractAndValidateNearAuth(c);
+      const { signerId } = await this.nearAuthService.extractAndValidateNearAuth(c);
 
       // Check if the NEAR account is authorized
-      const isAuthorized = await this.nearAuthService.isNearAccountAuthorized(signerId);
+      const authStatus = await this.nearAuthService.getNearAuthorizationStatus(signerId);
+      const isAuthorized = authStatus >= 0; // -1 means not authorized, 0 or greater means authorized
       if (!isAuthorized) {
         console.warn(`Unauthorized NEAR account attempt: ${signerId}`);
-        return c.json({
-          error: {
-            type: 'authorization_required',
-            message:
-              `NEAR account ${signerId} is not authorized. Please authorize via POST /auth/authorize/near first.`,
-            status: 403, // Forbidden
-          },
-        }, 403);
+        c.status(403);
+        return c.json(createEnhancedErrorResponse([createErrorDetail(
+          `NEAR account ${signerId} is not authorized. Please authorize via POST /auth/authorize/near first.`,
+          ApiErrorCode.FORBIDDEN,
+          true,
+          platform,
+        )]));
       }
 
       // Get the base URL of the current request
@@ -68,7 +72,7 @@ export class AuthController {
         platform,
         signerId, // Pass the NEAR account ID for linking during callback
         callbackUrl,
-        DEFAULT_CONFIG.AUTH.DEFAULT_SCOPES,
+        DEFAULT_CONFIG.AUTH.DEFAULT_SCOPES, // scopes can come from request
         successUrl || origin,
         errorUrl || successUrl || origin,
       );
@@ -77,13 +81,8 @@ export class AuthController {
       return c.json({ data: authData });
     } catch (error) {
       console.error('Error initializing auth with NEAR:', error);
-      return c.json({
-        error: {
-          type: 'internal_error',
-          message: error instanceof Error ? error.message : 'An unexpected error occurred',
-          status: 500,
-        },
-      }, 500);
+      this.handleError(error, c, platform);
+      return c.res;
     }
   }
 
@@ -106,7 +105,7 @@ export class AuthController {
       // Check for errors
       if (error) {
         try {
-          const callbackResult = await this.authService.getAuthState(platform, state || '');
+          const callbackResult = await this.authService.getAuthState(state!);
           if (callbackResult && callbackResult.errorUrl) {
             const errorRedirectUrl = new URL(callbackResult.errorUrl);
             errorRedirectUrl.searchParams.set('error', error);
@@ -119,25 +118,25 @@ export class AuthController {
           console.error('Error retrieving auth state:', stateError);
         }
 
-        return c.json({
-          error: {
-            type: 'authentication_error',
-            message: `Twitter authorization error: ${error}${
-              error_description ? ` - ${error_description}` : ''
-            }`,
-            status: 400,
-          },
-        }, 400);
+        c.status(400);
+        return c.json(createEnhancedErrorResponse([createErrorDetail(
+          `${platform} authorization error: ${error}${
+            error_description ? ` - ${error_description}` : ''
+          }`,
+          'authentication_error',
+          false,
+          platform,
+        )]));
       }
 
       if (!code || !state) {
-        return c.json({
-          error: {
-            type: 'validation_error',
-            message: 'Code and state are required',
-            status: 400,
-          },
-        }, 400);
+        c.status(400);
+        return c.json(createEnhancedErrorResponse([createErrorDetail(
+          'Code and state are required',
+          ApiErrorCode.VALIDATION_ERROR,
+          true,
+          platform,
+        )]));
       }
 
       const callbackResult = await this.authService.handleCallback(
@@ -157,13 +156,8 @@ export class AuthController {
       return c.redirect(redirectUrl.toString());
     } catch (error) {
       console.error('Error handling callback:', error);
-      return c.json({
-        error: {
-          type: 'internal_error',
-          message: error instanceof Error ? error.message : 'An unexpected error occurred',
-          status: 500,
-        },
-      }, 500);
+      this.handleError(error, c, platform);
+      return c.res;
     }
   }
 
@@ -174,41 +168,38 @@ export class AuthController {
    * @returns HTTP response with new tokens
    */
   async refreshToken(c: Context, platform: PlatformName): Promise<Response> {
+    let userId: string | undefined;
     try {
       // Extract NEAR account ID from the validated signature
-      const { signerId } = await extractAndValidateNearAuth(c);
+      const { signerId } = await this.nearAuthService.extractAndValidateNearAuth(c);
 
       // Extract userId from request body
       const body = await c.req.json();
-      const { userId } = body;
+      userId = body.userId;
 
       if (!userId) {
-        return c.json({
-          error: {
-            type: 'validation_error',
-            message: 'userId is required',
-            status: 400,
-          },
-        }, 400);
+        c.status(400);
+        return c.json(createEnhancedErrorResponse([createErrorDetail(
+          'userId is required',
+          ApiErrorCode.VALIDATION_ERROR,
+          true,
+          platform,
+        )]));
       }
 
       // Refresh token
       const tokens = await this.authService.refreshToken(platform, userId);
 
-      // Update the token in NEAR auth service
-      await this.nearAuthService.storeToken(signerId, platform, userId, tokens);
+      // Save tokens and link account
+      await this.nearAuthService.saveTokens(userId, platform, tokens);
+      await this.nearAuthService.linkAccount(signerId, platform, userId);
 
       // Return the new tokens
       return c.json({ data: tokens });
     } catch (error) {
       console.error('Error refreshing token:', error);
-      return c.json({
-        error: {
-          type: 'internal_error',
-          message: error instanceof Error ? error.message : 'An unexpected error occurred',
-          status: 500,
-        },
-      }, 500);
+      this.handleError(error, c, platform, userId);
+      return c.res;
     }
   }
 
@@ -219,22 +210,23 @@ export class AuthController {
    * @returns HTTP response with success status
    */
   async revokeToken(c: Context, platform: PlatformName): Promise<Response> {
+    let userId: string | undefined;
     try {
       // Extract NEAR account ID from the validated signature
-      const { signerId } = await extractAndValidateNearAuth(c);
+      const { signerId } = await this.nearAuthService.extractAndValidateNearAuth(c);
 
       // Extract userId from request body
       const body = await c.req.json();
-      const { userId } = body;
+      userId = body.userId;
 
       if (!userId) {
-        return c.json({
-          error: {
-            type: 'validation_error',
-            message: 'userId is required',
-            status: 400,
-          },
-        }, 400);
+        c.status(400);
+        return c.json(createEnhancedErrorResponse([createErrorDetail(
+          'userId is required',
+          ApiErrorCode.VALIDATION_ERROR,
+          true,
+          platform,
+        )]));
       }
 
       // Revoke token
@@ -242,20 +234,15 @@ export class AuthController {
 
       // Unlink the account from the NEAR wallet
       if (success) {
-        await unlinkAccountFromNear(signerId, platform, userId, this.env);
+        await unlinkAccountFromNear(signerId, platform, userId, this.nearAuthService);
       }
 
       // Return success status
       return c.json({ data: { success } });
     } catch (error) {
       console.error('Error revoking token:', error);
-      return c.json({
-        error: {
-          type: 'internal_error',
-          message: error instanceof Error ? error.message : 'An unexpected error occurred',
-          status: 500,
-        },
-      }, 500);
+      this.handleError(error, c, platform, userId);
+      return c.res;
     }
   }
 
@@ -266,41 +253,36 @@ export class AuthController {
    * @returns HTTP response with validity status
    */
   async hasValidTokens(c: Context, platform: PlatformName): Promise<Response> {
+    let userId: string | undefined;
     try {
       // Extract NEAR account ID from the validated signature
-      const { signerId } = await extractAndValidateNearAuth(c);
+      const { signerId } = await this.nearAuthService.extractAndValidateNearAuth(c);
 
       // Extract userId from request body or query parameters
-      const userId = c.req.query('userId');
+      userId = c.req.query('userId');
 
       if (!userId) {
-        return c.json({
-          error: {
-            type: 'validation_error',
-            message: 'userId is required',
-            status: 400,
-          },
-        }, 400);
+        c.status(400);
+        return c.json(createEnhancedErrorResponse([createErrorDetail(
+          'userId is required',
+          ApiErrorCode.VALIDATION_ERROR,
+          true,
+          platform,
+        )]));
       }
 
       // Check if user has valid tokens
       const hasTokens = await this.authService.hasValidTokens(platform, userId);
 
       // Also check if the tokens are linked to this NEAR account
-      const token = await this.nearAuthService.getToken(signerId, platform, userId);
-      const isLinked = !!token;
+      const isLinked = await this.nearAuthService.hasAccess(signerId, platform, userId);
 
       // Return validity status
       return c.json({ data: { hasTokens, isLinked } });
     } catch (error) {
       console.error('Error checking tokens:', error);
-      return c.json({
-        error: {
-          type: 'internal_error',
-          message: error instanceof Error ? error.message : 'An unexpected error occurred',
-          status: 500,
-        },
-      }, 500);
+      this.handleError(error, c, platform, userId);
+      return c.res;
     }
   }
 
@@ -312,10 +294,10 @@ export class AuthController {
   async listConnectedAccounts(c: Context): Promise<Response> {
     try {
       // Extract NEAR account ID from the validated signature
-      const { signerId } = await extractAndValidateNearAuth(c);
+      const { signerId } = await this.nearAuthService.extractAndValidateNearAuth(c);
 
       // Get all connected accounts
-      const accounts = await this.nearAuthService.listConnectedAccounts(signerId);
+      const accounts = await this.nearAuthService.getLinkedAccounts(signerId);
 
       // Fetch user profiles for each account
       const accountsWithProfiles = await Promise.all(
@@ -334,13 +316,8 @@ export class AuthController {
       return c.json({ data: { accounts: accountsWithProfiles } });
     } catch (error) {
       console.error('Error listing connected accounts:', error);
-      return c.json({
-        error: {
-          type: 'internal_error',
-          message: error instanceof Error ? error.message : 'An unexpected error occurred',
-          status: 500,
-        },
-      }, 500);
+      this.handleError(error, c);
+      return c.res;
     }
   }
 
@@ -352,31 +329,25 @@ export class AuthController {
   async authorizeNear(c: Context): Promise<Response> {
     try {
       // Extract and validate NEAR auth data from the header
-      const { signerId } = await extractAndValidateNearAuth(c);
+      const { signerId } = await this.nearAuthService.extractAndValidateNearAuth(c);
 
-      // Attempt to authorize the NEAR account
+      // Authorize the NEAR account
       const result = await this.nearAuthService.authorizeNearAccount(signerId);
 
       if (result.success) {
         return c.json({ data: { success: true, signerId: signerId } });
       } else {
-        return c.json({
-          error: {
-            type: 'internal_error',
-            message: result.error || 'Failed to authorize NEAR account',
-            status: 500,
-          },
-        }, 500);
+        c.status(500);
+        return c.json(createEnhancedErrorResponse([createErrorDetail(
+          result.error || 'Failed to authorize NEAR account',
+          ApiErrorCode.INTERNAL_ERROR,
+          false,
+        )]));
       }
     } catch (error) {
       console.error('Unexpected error authorizing NEAR account:', error);
-      return c.json({
-        error: {
-          type: 'internal_error',
-          message: error instanceof Error ? error.message : 'An unexpected error occurred',
-          status: 500,
-        },
-      }, 500);
+      this.handleError(error, c);
+      return c.res;
     }
   }
 
@@ -389,10 +360,10 @@ export class AuthController {
   async unauthorizeNear(c: Context): Promise<Response> {
     try {
       // Extract and validate NEAR auth data from the header
-      const { signerId } = await extractAndValidateNearAuth(c);
+      const { signerId } = await this.nearAuthService.extractAndValidateNearAuth(c);
 
       // Get all linked accounts before removing authorization
-      const linkedAccounts = await this.nearAuthService.listConnectedAccounts(signerId);
+      const linkedAccounts = await this.nearAuthService.getLinkedAccounts(signerId);
 
       // Track any errors that occur during account unlinking
       const unlinkErrors: Array<{ platform: PlatformName; userId: string; error: string }> = [];
@@ -404,7 +375,12 @@ export class AuthController {
           await this.authService.revokeToken(account.platform, account.userId);
 
           // Unlink the account from the NEAR wallet
-          await unlinkAccountFromNear(signerId, account.platform, account.userId, this.env);
+          await unlinkAccountFromNear(
+            signerId,
+            account.platform,
+            account.userId,
+            this.nearAuthService,
+          );
 
           console.log(
             `Unlinked ${account.platform} account ${account.userId} from NEAR wallet ${signerId}`,
@@ -422,7 +398,7 @@ export class AuthController {
         }
       }
 
-      // Attempt to unauthorize the NEAR account
+      // Unauthorize the NEAR account
       const result = await this.nearAuthService.unauthorizeNearAccount(signerId);
 
       if (result.success) {
@@ -435,23 +411,17 @@ export class AuthController {
           },
         });
       } else {
-        return c.json({
-          error: {
-            type: 'internal_error',
-            message: result.error || 'Failed to unauthorize NEAR account',
-            status: 500,
-          },
-        }, 500);
+        c.status(500);
+        return c.json(createEnhancedErrorResponse([createErrorDetail(
+          result.error || 'Failed to unauthorize NEAR account',
+          ApiErrorCode.INTERNAL_ERROR,
+          false,
+        )]));
       }
     } catch (error) {
       console.error('Unexpected error unauthorizing NEAR account:', error);
-      return c.json({
-        error: {
-          type: 'internal_error',
-          message: error instanceof Error ? error.message : 'An unexpected error occurred',
-          status: 500,
-        },
-      }, 500);
+      this.handleError(error, c);
+      return c.res;
     }
   }
 
@@ -463,9 +433,11 @@ export class AuthController {
   async checkNearAuthorizationStatus(c: Context): Promise<Response> {
     try {
       // Extract and validate NEAR auth data from the header
-      const { signerId } = await extractAndValidateNearAuth(c);
+      const { signerId } = await this.nearAuthService.extractAndValidateNearAuth(c);
 
-      const isAuthorized = await this.nearAuthService.isNearAccountAuthorized(signerId);
+      // Check the NEAR account authorization status
+      const authStatus = await this.nearAuthService.getNearAuthorizationStatus(signerId);
+      const isAuthorized = authStatus >= 0; // -1 means not authorized, 0 or greater means authorized
 
       return c.json({
         data: {
@@ -475,13 +447,8 @@ export class AuthController {
       });
     } catch (error) {
       console.error('Unexpected error checking NEAR account authorization status:', error);
-      return c.json({
-        error: {
-          type: 'internal_error',
-          message: error instanceof Error ? error.message : 'An unexpected error occurred',
-          status: 500,
-        },
-      }, 500);
+      this.handleError(error, c);
+      return c.res;
     }
   }
 
@@ -492,59 +459,57 @@ export class AuthController {
    * @returns HTTP response with the refreshed profile
    */
   async refreshUserProfile(c: Context, platform: PlatformName): Promise<Response> {
+    let userId: string | undefined;
     try {
       // Extract and validate NEAR auth data from the header
-      const { signerId } = await extractAndValidateNearAuth(c);
+      const { signerId } = await this.nearAuthService.extractAndValidateNearAuth(c);
 
       const body = await c.req.json();
-      const { userId } = body;
+      userId = body.userId;
 
       if (!userId) {
-        return c.json({
-          error: {
-            type: 'validation_error',
-            message: 'userId is required',
-            status: 400,
-          },
-        }, 400);
+        c.status(400);
+        return c.json(createEnhancedErrorResponse([createErrorDetail(
+          'userId is required',
+          ApiErrorCode.VALIDATION_ERROR,
+          true,
+          platform,
+        )]));
       }
 
       // Check if the tokens are linked to this NEAR account
-      const token = await this.nearAuthService.getToken(signerId, platform, userId);
-      if (!token) {
-        return c.json({
-          error: {
-            type: 'authorization_error',
-            message: 'Account not linked to this NEAR wallet',
-            status: 403,
-          },
-        }, 403);
+      const hasAccess = await this.nearAuthService.hasAccess(signerId, platform, userId);
+      if (!hasAccess) {
+        c.status(403);
+        return c.json(createEnhancedErrorResponse([createErrorDetail(
+          'Account not linked to this NEAR wallet',
+          ApiErrorCode.UNAUTHORIZED,
+          true,
+          platform,
+          userId,
+        )]));
       }
 
       // Force refresh the user profile
       const profile = await this.authService.getUserProfile(platform, userId, true);
 
       if (!profile) {
-        return c.json({
-          error: {
-            type: 'not_found',
-            message: 'User profile not found',
-            status: 404,
-          },
-        }, 404);
+        c.status(404);
+        return c.json(createEnhancedErrorResponse([createErrorDetail(
+          'User profile not found',
+          ApiErrorCode.NOT_FOUND,
+          false,
+          platform,
+          userId,
+        )]));
       }
 
       // Return the refreshed profile
       return c.json({ data: { profile } });
     } catch (error) {
       console.error('Error refreshing user profile:', error);
-      return c.json({
-        error: {
-          type: 'internal_error',
-          message: error instanceof Error ? error.message : 'An unexpected error occurred',
-          status: 500,
-        },
-      }, 500);
+      this.handleError(error, c, platform, userId);
+      return c.res;
     }
   }
 }

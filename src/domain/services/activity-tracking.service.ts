@@ -1,5 +1,5 @@
 import { Env } from '../../config/env.ts';
-import { PlatformName } from '../../types/platform.types.ts';
+import { PlatformName } from '@crosspost/types';
 import { PrefixedKvStore } from '../../utils/kv-store.utils.ts';
 
 /**
@@ -358,10 +358,11 @@ export class ActivityTrackingService {
       case TimePeriod.MONTHLY:
         return new Date(now.getFullYear(), now.getMonth(), 1).getTime();
 
-      case TimePeriod.WEEKLY:
+      case TimePeriod.WEEKLY: {
         const day = now.getDay();
         const diff = now.getDate() - day + (day === 0 ? -6 : 1); // Adjust for Sunday
         return new Date(now.getFullYear(), now.getMonth(), diff).getTime();
+      }
 
       case TimePeriod.DAILY:
         return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();

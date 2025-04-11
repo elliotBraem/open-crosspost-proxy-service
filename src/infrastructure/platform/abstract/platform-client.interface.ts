@@ -1,4 +1,4 @@
-import { PlatformError } from './platform-error.ts';
+import { AuthToken } from '../../storage/auth-token-storage.ts';
 
 /**
  * Platform Client Interface
@@ -14,9 +14,10 @@ export interface PlatformClient {
   /**
    * Get a client instance for a specific user
    * @param userId The user ID to get a client for
+   * @param token The token to use for authentication
    * @throws PlatformError if the client cannot be created
    */
-  getClientForUser(userId: string): Promise<any>;
+  getClientForUser(userId: string, token: AuthToken): Promise<any>;
 
   /**
    * Get the authorization URL for the OAuth flow

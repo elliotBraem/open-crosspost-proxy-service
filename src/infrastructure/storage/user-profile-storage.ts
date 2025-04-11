@@ -1,6 +1,5 @@
 import { Env } from '../../config/env.ts';
-import { PlatformName } from '../../types/platform.types.ts';
-import { UserProfile } from '../../types/user-profile.types.ts';
+import { PlatformName, UserProfile } from '@crosspost/types';
 import { PrefixedKvStore } from '../../utils/kv-store.utils.ts';
 
 /**
@@ -8,12 +7,12 @@ import { PrefixedKvStore } from '../../utils/kv-store.utils.ts';
  * Handles storage and retrieval of user profiles
  */
 export class UserProfileStorage {
-  private profileStore: PrefixedKvStore;
   private readonly CACHE_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
 
-  constructor(private env: Env) {
-    this.profileStore = new PrefixedKvStore(['profile']);
-  }
+  constructor(
+    private env: Env,
+    private profileStore: PrefixedKvStore,
+  ) {}
 
   /**
    * Get a user profile

@@ -1,41 +1,30 @@
+import { Platform, PlatformName, UserProfile } from '@crosspost/types';
 import { Env } from '../../config/env.ts';
 import { DEFAULT_CONFIG } from '../../config/index.ts';
-import { PlatformAuth } from '../../infrastructure/platform/abstract/platform-auth.interface.ts';
+import {
+  AuthState,
+  PlatformAuth,
+} from '../../infrastructure/platform/abstract/platform-auth.interface.ts';
 import { PlatformProfile } from '../../infrastructure/platform/abstract/platform-profile.interface.ts';
 import { TwitterAuth } from '../../infrastructure/platform/twitter/twitter-auth.ts';
 import { TwitterProfile } from '../../infrastructure/platform/twitter/twitter-profile.ts';
-import { TokenStorage, TwitterTokens } from '../../infrastructure/storage/auth-token-storage.ts';
-import { Platform, PlatformName } from '../../types/platform.types.ts';
-import { createApiResponse, createErrorResponse } from '../../types/response.types.ts';
+import { NearAuthService } from '../../infrastructure/security/near-auth-service.ts';
+import { AuthToken } from '../../infrastructure/storage/auth-token-storage.ts';
 import { linkAccountToNear } from '../../utils/account-linking.utils.ts';
-import { UserProfile } from '../../types/user-profile.types.ts';
+import { PrefixedKvStore } from '../../utils/kv-store.utils.ts';
 
 /**
  * Auth Service
  * Domain service for authentication-related operations
  */
 export class AuthService {
-  private platformAuthMap: Map<PlatformName, PlatformAuth>;
-  private platformProfileMap: Map<PlatformName, PlatformProfile>;
-  private tokenStorage: TokenStorage;
-  private env: Env;
-
-  constructor(env: Env) {
-    this.env = env;
-    this.tokenStorage = new TokenStorage(env.ENCRYPTION_KEY, env);
-
-    // Initialize supported platforms
-    this.platformAuthMap = new Map();
-    this.platformAuthMap.set(Platform.TWITTER, new TwitterAuth(env));
-    // Add more platforms as they're implemented
-    // this.platformAuthMap.set(Platform.LINKEDIN, new LinkedInAuth(env));
-
-    // Initialize platform profiles
-    this.platformProfileMap = new Map();
-    this.platformProfileMap.set(Platform.TWITTER, new TwitterProfile(env));
-    // Add more platform profiles as they're implemented
-    // this.platformProfileMap.set(Platform.LINKEDIN, new LinkedInProfile(env));
-  }
+  constructor(
+    private env: Env,
+    private nearAuthService: NearAuthService,
+    private authStateStore: PrefixedKvStore,
+    private platformAuthMap: Map<PlatformName, PlatformAuth>,
+    private platformProfileMap: Map<PlatformName, PlatformProfile>,
+  ) {}
 
   /**
    * Get the platform-specific auth implementation
@@ -80,12 +69,32 @@ export class AuthService {
     signerId: string,
     redirectUri: string,
     scopes: string[] = DEFAULT_CONFIG.AUTH.DEFAULT_SCOPES,
-    successUrl?: string,
+    successUrl: string,
     errorUrl?: string,
   ): Promise<{ authUrl: string; state: string; codeVerifier?: string }> {
     try {
+      // Get platform specific auth service
       const platformAuth = this.getPlatformAuth(platform);
-      return await platformAuth.initializeAuth(signerId, redirectUri, scopes, successUrl, errorUrl);
+      const result = await platformAuth.initializeAuth(redirectUri, scopes);
+      const { state, codeVerifier } = result;
+
+      // Store the auth state in Deno KV
+      const authState: AuthState = {
+        redirectUri,
+        codeVerifier: codeVerifier || '',
+        state,
+        createdAt: Date.now(),
+        successUrl: successUrl,
+        errorUrl: errorUrl || successUrl,
+        signerId, // Store the NEAR account ID
+      };
+
+      // Store the state in KV with 1 hour expiration, this is needed for the callback
+      await this.authStateStore.set([state], authState, {
+        expireIn: 3600000, // 1 hour in milliseconds
+      });
+
+      return result;
     } catch (error) {
       console.error('Error initializing auth:', error);
       throw error;
@@ -94,17 +103,25 @@ export class AuthService {
 
   /**
    * Get the auth state data from storage
-   * @param platform The platform name (e.g., Platform.TWITTER)
    * @param state The state parameter from the callback
    * @returns The auth state data including successUrl and errorUrl
    */
   async getAuthState(
-    platform: PlatformName,
     state: string,
   ): Promise<{ successUrl: string; errorUrl: string; signerId: string } | null> {
     try {
-      const platformAuth = this.getPlatformAuth(platform);
-      return await platformAuth.getAuthState(state);
+      // Get the auth state directly from the authStateStore
+      const authState = await this.authStateStore.get<AuthState>([state]);
+
+      if (!authState) {
+        return null;
+      }
+
+      return {
+        successUrl: authState.successUrl,
+        errorUrl: authState.errorUrl,
+        signerId: authState.signerId,
+      };
     } catch (error) {
       console.error('Error getting auth state:', error);
       return null;
@@ -122,7 +139,7 @@ export class AuthService {
     platform: PlatformName,
     code: string,
     state: string,
-  ): Promise<{ userId: string; tokens: TwitterTokens; successUrl: string }> {
+  ): Promise<{ userId: string; token: AuthToken; successUrl: string }> {
     try {
       const platformAuth = this.getPlatformAuth(platform);
       return await platformAuth.handleCallback(code, state);
@@ -138,7 +155,7 @@ export class AuthService {
    * @param userId The user ID whose token should be refreshed
    * @returns The new tokens
    */
-  async refreshToken(platform: PlatformName, userId: string): Promise<TwitterTokens> {
+  async refreshToken(platform: PlatformName, userId: string): Promise<AuthToken> {
     try {
       const platformAuth = this.getPlatformAuth(platform);
       return await platformAuth.refreshToken(userId);
@@ -172,7 +189,7 @@ export class AuthService {
    */
   async hasValidTokens(platform: PlatformName, userId: string): Promise<boolean> {
     try {
-      return await this.tokenStorage.hasTokens(userId, platform);
+      return await this.nearAuthService.hasTokens(userId, platform);
     } catch (error) {
       console.error('Error checking tokens:', error);
       return false;
@@ -197,25 +214,13 @@ export class AuthService {
       const tokens = await platformAuth.refreshToken(userId);
 
       // Link the account using the utility function
-      await linkAccountToNear(signerId, platform, userId, tokens, this.env);
+      await linkAccountToNear(signerId, platform, userId, tokens, this.nearAuthService);
 
       return true;
     } catch (error) {
       console.error(`Error linking ${platform} account to NEAR wallet:`, error);
       throw new Error(`Failed to link ${platform} account to NEAR wallet`);
     }
-  }
-
-  /**
-   * Create a standard API response
-   * @param data The response data
-   * @returns A standard API response
-   */
-  createResponse(data: any): Response {
-    return new Response(JSON.stringify(createApiResponse(data)), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
   }
 
   /**
@@ -240,21 +245,18 @@ export class AuthService {
   }
 
   /**
-   * Create an error response
-   * @param error The error object
-   * @param status The response status
-   * @returns An error response
+   * Check if a NEAR account has access to a platform account
+   * @param signerId NEAR account ID
+   * @param platform Platform name (e.g., Platform.TWITTER)
+   * @param userId User ID on the platform
+   * @returns True if the NEAR account has access to the platform account
    */
-  createErrorResponse(error: any, status = 500): Response {
-    const errorMessage = error.message || 'An unexpected error occurred';
-    const errorType = error.type || 'INTERNAL_ERROR';
-
-    return new Response(
-      JSON.stringify(createErrorResponse(errorType, errorMessage, error.code, error.details)),
-      {
-        status,
-        headers: { 'Content-Type': 'application/json' },
-      },
-    );
+  async hasAccess(signerId: string, platform: PlatformName, userId: string): Promise<boolean> {
+    try {
+      return await this.nearAuthService.hasAccess(signerId, platform, userId);
+    } catch (error) {
+      console.error('Error checking access:', error);
+      return false;
+    }
   }
 }

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { Buffer } from 'node:buffer';
-import { MediaContent } from '../infrastructure/platform/abstract/platform-post.interface.ts';
+import { MediaContent } from '@crosspost/types';
 
 /**
  * Media Cache Utility

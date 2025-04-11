@@ -1,7 +1,6 @@
+import { PlatformName } from '@crosspost/types';
 import { Context } from '../../deps.ts';
 import { RateLimitService } from '../domain/services/rate-limit.service.ts';
-import { getEnv } from '../config/env.ts';
-import { PlatformName } from '../types/platform.types.ts';
 import { UsageRateLimitMiddleware } from '../middleware/usage-rate-limit.middleware.ts';
 import { PrefixedKvStore } from '../utils/kv-store.utils.ts';
 
@@ -12,9 +11,8 @@ import { PrefixedKvStore } from '../utils/kv-store.utils.ts';
 export class RateLimitController {
   private rateLimitService: RateLimitService;
 
-  constructor() {
-    const env = getEnv();
-    this.rateLimitService = new RateLimitService(env);
+  constructor(rateLimitService: RateLimitService) {
+    this.rateLimitService = rateLimitService;
   }
 
   /**

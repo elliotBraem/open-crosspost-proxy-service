@@ -27,9 +27,13 @@
    - Implement proper CORS restrictions
 
 5. **Testing Approach**
+   - Use Deno's native test runner (`Deno.test`)
+   - Employ BDD style with `@std/testing/bdd` (describe/it)
    - Write unit tests for all services and utilities
-   - Create integration tests for API endpoints
+   - Create integration tests for API endpoints and SDK
+   - Use test steps (`t.step()`) for organizing complex tests
    - Mock external dependencies in tests
+   - Leverage Deno's built-in sanitizers for resources, operations, and exits
    - Aim for high test coverage of critical paths
 
 ## Development Workflow
@@ -101,7 +105,8 @@
    - Enable TypeScript strict mode
 
 2. **Development Tools**
-   - Use Wrangler for local development
-   - Leverage Cloudflare dashboard for monitoring
-   - Use Jest for testing
+   - Use Deno CLI for local development
+   - Leverage Deno Deploy dashboard for monitoring
+   - Use Deno's built-in test runner for testing
+   - Use `@std/assert` and `@std/expect` for assertions
    - Implement GitHub Actions for CI/CD

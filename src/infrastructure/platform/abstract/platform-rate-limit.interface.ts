@@ -2,12 +2,8 @@
  * Platform Rate Limit Interface
  * Defines the common interface for platform-specific rate limit operations
  */
-export interface RateLimitStatus {
-  limit: number;
-  remaining: number;
-  reset: number;
-  endpoint: string;
-}
+
+import { RateLimitStatus } from '@crosspost/types';
 
 export interface PlatformRateLimit {
   /**

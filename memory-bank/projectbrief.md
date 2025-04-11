@@ -1,108 +1,88 @@
-# Social Media API Proxy Project Brief
+# Open Crosspost Proxy Service: Project Brief
 
 ## Project Overview
 
-A secure proxy for social media APIs that allows authorized frontends to perform actions on behalf
-of users who have granted permission. The system securely stores OAuth tokens, handles refreshes,
-enforces rate limits, and supports all major API functions including media uploads. Initially
-focused on Twitter, the architecture is designed to be platform-agnostic to support additional
-social media platforms in the future.
+The Open Crosspost Proxy Service is a secure bridge between frontend applications and social media
+platforms. It enables authorized applications to perform actions on behalf of users who have granted
+permission, without exposing sensitive OAuth tokens to the client. The service securely stores
+tokens, handles refreshes, enforces rate limits, and supports all major API functions including
+media uploads. Built with a platform-agnostic architecture, it currently supports Twitter with the
+ability to easily extend to other social media platforms.
 
 ## Core Requirements
 
-1. **Secure Authentication**
-   - Implement OAuth 2.0 flow with social media platforms
-   - Securely store and manage user tokens
-   - Support token refresh and revocation
-   - Authenticate client applications with API keys
-   - Support NEAR wallet signature-based authentication
+### Authentication & Security
 
-2. **Comprehensive API Support**
-   - Support all major social media actions (post, repost, like, reply, etc.)
-   - Handle media uploads for posts
-   - Support post deletion and management
-   - Enable interaction with social media content
+- ✅ OAuth 2.0 flow implementation with social media platforms
+- ✅ Secure token storage with encryption
+- ✅ Token refresh and revocation support
+- ✅ NEAR wallet signature-based authentication
+- ✅ Strict CORS policies for client applications
 
-3. **Security & Performance**
-   - Encrypt sensitive data at rest and in transit
-   - Implement proper rate limiting (both platform API and client-side)
-   - Enforce strict CORS policies for client applications
-   - Optimize for global edge distribution
+### API Functionality
 
-4. **Reliability & Monitoring**
-   - Implement circuit breaking for platform APIs
-   - Provide graceful error handling
-   - Log all operations for monitoring
-   - Set up health checks and alerts
+- ✅ Comprehensive social media actions (post, repost, like, reply, etc.)
+- ✅ Media upload handling with chunked uploads
+- ✅ Post management (creation, deletion, editing)
+- ✅ Social media interaction (likes, replies, quotes)
+
+### Performance & Reliability
+
+- ✅ Efficient rate limiting implementation
+- ✅ Graceful error handling with detailed responses
+- ✅ Edge-optimized deployment
+- ✅ Comprehensive logging and monitoring
+
+### Developer Experience
+
+- ✅ TypeScript SDK with full type safety
+- ✅ Simplified authentication flow
+- ✅ Consistent API across platforms
+- ✅ Comprehensive documentation
 
 ## Technical Stack
 
-- **Deno**: Runtime, package manager, and development environment
-- **Deno Deploy**: Edge runtime for JavaScript/TypeScript applications
-- **Deno KV**: Built-in key-value storage for tokens and configuration
-- **Upstash Redis**: External database for structured data storage
-- **TypeScript**: Primary development language
-- **Hono**: HTTP framework for routing
-- **twitter-api-v2**: Twitter API communication
-- **jose**: JWT handling
-- **zod**: Type validation and schema definition
+| Component      | Technology     | Purpose                                              |
+| -------------- | -------------- | ---------------------------------------------------- |
+| Runtime        | Deno           | JavaScript/TypeScript runtime with built-in security |
+| Deployment     | Deno Deploy    | Edge runtime for global performance                  |
+| Storage        | Deno KV        | Key-value storage for tokens and configuration       |
+| Language       | TypeScript     | Type-safe development                                |
+| HTTP Framework | Hono           | Fast, middleware-based routing                       |
+| Validation     | Zod            | Schema validation and type generation                |
+| Encryption     | jose           | JWT handling and cryptographic operations            |
+| Twitter API    | twitter-api-v2 | Twitter API communication                            |
 
-## Project Goals
+## Architecture
 
-1. Create a secure, reliable proxy for social media API operations
-2. Simplify social media integration for authorized client applications
-3. Ensure proper handling of user authentication and permissions
-4. Maintain high performance and availability
-5. Implement comprehensive security measures
-6. Support core social media API functions for posting and interaction
-7. Design a platform-agnostic architecture that can be extended to multiple social media platforms
+The service uses a layered architecture with clear separation of concerns:
+
+```mermaid
+flowchart TD
+    Client[Client Applications] --> API[API Layer]
+    API --> Controllers[Controllers]
+    Controllers --> Services[Domain Services]
+    Services --> PlatformAbstraction[Platform Abstraction]
+    Services --> Security[Security Services]
+```
+
+## SDK Packages
+
+The service provides three SDK packages for client integration:
+
+1. **@crosspost/types**: Shared type definitions
+2. **@crosspost/near-simple-signing**: NEAR wallet signature utilities
+3. **@crosspost/sdk**: Main client SDK with platform-specific implementations
 
 ## Success Criteria
 
-1. Successfully authenticate users with social media platforms
-2. Securely store and manage user tokens
-3. Process all supported API actions
-4. Handle media uploads properly
-5. Enforce appropriate rate limits
-6. Restrict access to authorized applications only
-7. Maintain high availability and performance
-8. Properly log and monitor all operations
-9. Support multiple social media platforms through a unified interface
-
-## Implementation Status
-
-The project has progressed from the initial implementation phase to a reorganization phase. We've
-implemented a platform-agnostic architecture that makes it easier to adapt the service for other
-social media platforms beyond Twitter. The core infrastructure, authentication system, API
-endpoints, and middleware have been implemented. The project is currently being migrated from
-Cloudflare Workers to Deno Deploy.
-
-### Completed Components
-
-- Core project structure and routing
-- Authentication flow with OAuth 2.0
-- Token storage and management
-- Post creation, retrieval, and management
-- Media upload handling
-- Like functionality
-- Error handling middleware
-- CORS handling
-- Platform abstraction interfaces
-- Twitter-specific implementations
-- NEAR wallet signature-based authentication
-
-### In Progress
-
-- Migration from Cloudflare Workers to Deno Deploy
-- Comprehensive testing
-- Rate limiting implementation
-- Monitoring and logging
-- Documentation
-
-## Next Steps
-
-1. Complete migration to Deno Deploy
-2. Implement comprehensive testing framework
-3. Enhance security features
-4. Set up monitoring and observability
-5. Prepare for deployment to production
+✅ Secure authentication with social media platforms\
+✅ Safe token management with encryption\
+✅ Support for all core social media actions\
+✅ Proper media upload handling\
+✅ Effective rate limit enforcement\
+✅ Access restricted to authorized applications\
+✅ High performance and reliability\
+✅ Comprehensive logging and monitoring\
+✅ Platform-agnostic design for extensibility\
+✅ Developer-friendly SDK with TypeScript support

@@ -1,5 +1,14 @@
+import { ApiError, ApiErrorCode, Platform, PlatformName } from '@crosspost/types';
 import { Context, Next } from '../../deps.ts';
-import { isSupportedPlatform, PlatformName } from '../types/platform.types.ts';
+
+/**
+ * Check if a string is a valid platform name
+ * @param platform The platform name to check
+ * @returns True if the platform is supported
+ */
+export function isSupportedPlatform(platform: string): platform is PlatformName {
+  return Object.values(Platform).includes(platform as Platform);
+}
 
 /**
  * Platform Middleware
@@ -15,23 +24,20 @@ export class PlatformMiddleware {
       const platform = c.req.param('platform');
 
       if (!platform) {
-        return c.json({
-          error: {
-            type: 'validation_error',
-            message: 'Platform parameter is required',
-            status: 400,
-          },
-        }, 400);
+        throw new ApiError(
+          'Platform parameter is required',
+          ApiErrorCode.VALIDATION_ERROR,
+          400,
+        );
       }
 
       if (!isSupportedPlatform(platform)) {
-        return c.json({
-          error: {
-            type: 'validation_error',
-            message: `Unsupported platform: ${platform}`,
-            status: 400,
-          },
-        }, 400);
+        throw new ApiError(
+          `Unsupported platform: ${platform}`,
+          ApiErrorCode.VALIDATION_ERROR,
+          400,
+          { platform },
+        );
       }
 
       // Add the validated platform to the context variables

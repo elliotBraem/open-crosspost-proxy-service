@@ -12,6 +12,7 @@
   "imports": {
     "hono": "jsr:@hono/hono",
     "zod": "npm:zod",
+    "@hono/zod-openapi": "npm:@hono/zod-openapi",
     "twitter-api-v2": "npm:twitter-api-v2",
     "@twitter-api-v2/plugin-rate-limit": "npm:@twitter-api-v2/plugin-rate-limit",
     "@twitter-api-v2/plugin-token-refresher": "npm:@twitter-api-v2/plugin-token-refresher",
@@ -19,12 +20,11 @@
     "@upstash/redis": "npm:@upstash/redis",
     "jose": "npm:jose",
     "openapi3-ts": "npm:openapi3-ts",
-    "std/uuid": "https://deno.land/std@0.220.1/uuid/mod.ts",
-    "std/crypto": "https://deno.land/std@0.220.1/crypto/mod.ts",
-    "std/http": "https://deno.land/std@0.220.1/http/mod.ts",
-    "std/assert": "https://deno.land/std@0.220.1/assert/mod.ts",
-    "bs58": "npm:bs58",
-    "borsher": "npm:borsher"
+    "std/uuid": "https://deno.land/std@0.206.0/uuid/mod.ts",
+    "std/crypto": "https://deno.land/std@0.206.0/crypto/mod.ts",
+    "std/http": "https://deno.land/std@0.206.0/http/mod.ts",
+    "std/assert": "https://deno.land/std@0.206.0/assert/mod.ts",
+    "@crosspost/types": "./packages/types/deno_dist/mod.ts"
   },
   "fmt": {
     "indentWidth": 2,
@@ -45,5 +45,6 @@
     "strictBindCallApply": true,
     "strictPropertyInitialization": true,
     "noImplicitThis": true
-  }
+  },
+  "nodeModulesDir": "auto"
 }

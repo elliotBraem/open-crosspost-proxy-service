@@ -1,0 +1,52 @@
+{
+  "name": "@crosspost/monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Crosspost API SDK monorepo",
+  "workspaces": [
+    "types",
+    "near-simple-signing",
+    "sdk"
+  ],
+  "scripts": {
+    "build": "bun run build:node",
+    "build:node": "bun run build:node:types && bun run build:node:near-simple-signing && bun run build:node:sdk",
+    "build:node:types": "cd types && bun run build:node",
+    "build:node:near-simple-signing": "cd near-simple-signing && bun run build:node",
+    "build:node:sdk": "cd sdk && bun run build:node",
+    "build:deno": "bun run build:deno:types && bun run build:deno:near-simple-signing",
+    "build:deno:types": "cd types && bun run build:deno",
+    "build:deno:near-simple-signing": "cd near-simple-signing && bun run build:deno",
+    "build:all": "bun run build:node && bun run build:deno",
+    "clean": "bun run clean:types && bun run clean:near-simple-signing && bun run clean:sdk",
+    "clean:types": "cd types && bun run clean",
+    "clean:near-simple-signing": "cd near-simple-signing && bun run clean",
+    "clean:sdk": "cd sdk && bun run clean",
+    "dev": "bun run dev:types",
+    "dev:types": "cd types && bun run dev",
+    "dev:near-simple-signing": "cd near-simple-signing && bun run dev",
+    "dev:sdk": "cd sdk && bun run dev",
+    "lint": "bun run lint:types && bun run lint:near-simple-signing && bun run lint:sdk",
+    "lint:types": "cd types && bun run lint",
+    "lint:near-simple-signing": "cd near-simple-signing && bun run lint",
+    "lint:sdk": "cd sdk && bun run lint",
+    "typecheck": "bun run typecheck:types && bun run typecheck:near-simple-signing && bun run typecheck:sdk",
+    "typecheck:types": "cd types && bun run typecheck",
+    "typecheck:near-simple-signing": "cd near-simple-signing && bun run typecheck",
+    "typecheck:sdk": "cd sdk && bun run typecheck",
+    "prepublishOnly": "bun run clean && bun run build:all"
+  },
+  "keywords": [
+    "crosspost",
+    "sdk",
+    "api",
+    "social-media",
+    "near",
+    "twitter"
+  ],
+  "author": "Crosspost Team",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}

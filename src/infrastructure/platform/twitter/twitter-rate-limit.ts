@@ -1,6 +1,7 @@
 import { TwitterClient } from './twitter-client.ts';
 import { Env } from '../../../config/env.ts';
-import { PlatformRateLimit, RateLimitStatus } from '../abstract/platform-rate-limit.interface.ts';
+import { RateLimitStatus } from '@crosspost/types';
+import { PlatformRateLimit } from '../abstract/platform-rate-limit.interface.ts';
 
 /**
  * Twitter Rate Limit
@@ -10,8 +11,8 @@ export class TwitterRateLimit implements PlatformRateLimit {
   private twitterClient: TwitterClient;
   private actionEndpointMap: Record<string, { endpoint: string; version: 'v1' | 'v2' }>;
 
-  constructor(env: Env) {
-    this.twitterClient = new TwitterClient(env);
+  constructor(env: Env, twitterClient: TwitterClient) {
+    this.twitterClient = twitterClient;
 
     // Map common actions to their corresponding endpoints
     this.actionEndpointMap = {
@@ -41,11 +42,17 @@ export class TwitterRateLimit implements PlatformRateLimit {
         return null;
       }
 
+      // Calculate resetSeconds from reset timestamp
+      const resetDate = new Date(rateLimitData.reset * 1000);
+      const now = new Date();
+      const resetSeconds = Math.max(0, Math.floor((resetDate.getTime() - now.getTime()) / 1000));
+
       return {
         limit: rateLimitData.limit,
         remaining: rateLimitData.remaining,
-        reset: rateLimitData.reset,
+        reset: resetDate.toISOString(), // Convert to ISO string as required by RateLimitStatus
         endpoint,
+        resetSeconds,
       };
     } catch (error) {
       console.error('Error getting Twitter rate limit status:', error);

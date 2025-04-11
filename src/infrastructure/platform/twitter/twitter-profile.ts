@@ -1,22 +1,20 @@
 import { TwitterApi } from 'twitter-api-v2';
 import { Env } from '../../../config/env.ts';
-import { UserProfile } from '../../../types/user-profile.types.ts';
 import { PlatformProfile } from '../abstract/platform-profile.interface.ts';
 import { UserProfileStorage } from '../../storage/user-profile-storage.ts';
 import { TwitterClient } from './twitter-client.ts';
+import { UserProfile } from '@crosspost/types';
 
 /**
  * Twitter Profile
  * Implements the PlatformProfile interface for Twitter
  */
 export class TwitterProfile implements PlatformProfile {
-  private twitterClient: TwitterClient;
-  private profileStorage: UserProfileStorage;
-
-  constructor(env: Env) {
-    this.twitterClient = new TwitterClient(env);
-    this.profileStorage = new UserProfileStorage(env);
-  }
+  constructor(
+    private env: Env,
+    private twitterClient: TwitterClient,
+    private profileStorage: UserProfileStorage,
+  ) {}
 
   /**
    * Get a user's profile, fetching from the API if needed

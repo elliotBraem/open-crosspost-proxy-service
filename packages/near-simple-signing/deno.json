@@ -1,0 +1,31 @@
+{
+  "name": "@crosspost/near-simple-signing",
+  "version": "0.1.0",
+  "exports": "./mod.ts",
+  "publish": {
+    "include": [
+      "src/**/*.ts",
+      "mod.ts",
+      "README.md",
+      "LICENSE"
+    ],
+    "exclude": [
+      "**/*.test.ts",
+      "**/*.spec.ts"
+    ]
+  },
+  "imports": {
+    "borsh": "npm:borsh@^2.0.0",
+    "bs58": "npm:bs58@^5.0.0",
+    "tweetnacl": "npm:tweetnacl@^1.0.3"
+  },
+  "tasks": {
+    "check": "deno check src/**/*.ts mod.ts"
+  },
+  "fmt": {
+    "indentWidth": 2,
+    "lineWidth": 100,
+    "semiColons": true,
+    "singleQuote": true
+  }
+}

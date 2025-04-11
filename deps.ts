@@ -4,14 +4,17 @@ export * as crypto from 'std/crypto';
 export * as http from 'std/http';
 export * as assert from 'std/assert';
 
+// Local packages
+export * as NearSimpleSigning from './packages/near-simple-signing/mod.ts';
+
 // Hono framework
 export { Hono } from 'npm:hono';
 export { cors } from 'npm:hono/cors';
 export { HTTPException } from 'npm:hono/http-exception';
 export type { Context, MiddlewareHandler, Next } from 'npm:hono';
 
-// Zod validation
-export * as z from 'zod';
+// Zod validation and OpenAPI
+export { z } from 'zod';
 
 // Twitter API
 export { TwitterApi } from 'twitter-api-v2';
@@ -30,6 +33,3 @@ export * as jose from 'jose';
 
 // OpenAPI
 export * as openapi from 'openapi3-ts';
-
-// Base58 encoding/decoding
-export { default as base58 } from 'bs58';

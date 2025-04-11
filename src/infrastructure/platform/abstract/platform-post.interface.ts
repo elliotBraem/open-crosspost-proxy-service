@@ -2,44 +2,7 @@
  * Platform Post Interface
  * Defines the common interface for platform-specific post operations
  */
-import { PlatformName } from '../../../types/platform.types.ts';
-
-export interface MediaContent {
-  data: string | Blob;
-  mimeType?: string;
-  altText?: string;
-}
-
-export interface PostContent {
-  text?: string;
-  media?: MediaContent[];
-  platform?: PlatformName;
-  userId?: string;
-  postId?: string;
-}
-
-export interface PostResult {
-  id: string;
-  text?: string;
-  createdAt: string;
-  mediaIds?: string[];
-  threadIds?: string[];
-  quotedPostId?: string;
-  inReplyToId?: string;
-  success?: boolean;
-  [key: string]: any;
-}
-
-export interface DeleteResult {
-  success: boolean;
-  id: string;
-}
-
-export interface LikeResult {
-  success: boolean;
-  id: string;
-}
-
+import { DeleteResult, LikeResult, PostContent, PostResult } from '@crosspost/types';
 export interface PlatformPost {
   /**
    * Create a new post

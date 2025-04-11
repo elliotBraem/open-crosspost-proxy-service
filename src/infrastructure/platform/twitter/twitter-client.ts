@@ -1,27 +1,29 @@
-import { ITwitterApiClientPlugin, TwitterApi } from 'twitter-api-v2';
-import { TwitterApiAutoTokenRefresher } from '@twitter-api-v2/plugin-token-refresher';
-import { TwitterApiRateLimitPlugin } from '@twitter-api-v2/plugin-rate-limit';
+import { ApiErrorCode, Platform, PlatformError } from '@crosspost/types'; // Import ApiErrorCode
 import { TwitterApiCachePluginRedis } from '@twitter-api-v2/plugin-cache-redis';
+import { TwitterApiRateLimitPlugin } from '@twitter-api-v2/plugin-rate-limit';
+import { TwitterApiAutoTokenRefresher } from '@twitter-api-v2/plugin-token-refresher';
 import { Redis } from '@upstash/redis';
+import { ITwitterApiClientPlugin, TwitterApi } from 'twitter-api-v2';
+import { Env } from '../../../config/env.ts';
+import { AuthToken, TokenType } from '../../storage/auth-token-storage.ts';
 import { BasePlatformClient } from '../abstract/base-platform-client.ts';
 import { PlatformClient } from '../abstract/platform-client.interface.ts';
-import { PlatformError, PlatformErrorType } from '../abstract/platform-error.ts';
-import { TokenStorage, TokenType, TwitterTokens } from '../../storage/auth-token-storage.ts';
-import { Env } from '../../../config/env.ts';
+import { NearAuthService } from './../../security/near-auth-service.ts';
 
 /**
  * Twitter Client
  * Implements the PlatformClient interface for Twitter
  */
 export class TwitterClient extends BasePlatformClient implements PlatformClient {
-  private tokenStorage: TokenStorage;
   private rateLimitPlugin: TwitterApiRateLimitPlugin;
   private redisPlugin: TwitterApiCachePluginRedis | null = null;
   private redisClient: Redis | null = null;
 
-  constructor(env: Env) {
-    super(env);
-    this.tokenStorage = new TokenStorage(env.ENCRYPTION_KEY, env);
+  constructor(
+    env: Env,
+    private nearAuthService: NearAuthService,
+  ) {
+    super(env, Platform.TWITTER);
     this.rateLimitPlugin = new TwitterApiRateLimitPlugin();
 
     // Initialize Redis client if Upstash Redis credentials are available
@@ -55,27 +57,27 @@ export class TwitterClient extends BasePlatformClient implements PlatformClient 
   async getClientForUser(userId: string): Promise<TwitterApi> {
     try {
       // Get the tokens from the token store
-      const tokens = await this.tokenStorage.getTokens(userId, 'twitter');
+      const token = await this.nearAuthService.getTokens(userId, Platform.TWITTER);
 
       // Create the auto refresher plugin for OAuth 2.0
       const autoRefresherPlugin = new TwitterApiAutoTokenRefresher({
-        refreshToken: tokens.refreshToken || '',
+        refreshToken: token.refreshToken || '',
         refreshCredentials: {
           clientId: this.env.TWITTER_CLIENT_ID,
           clientSecret: this.env.TWITTER_CLIENT_SECRET,
         },
         onTokenUpdate: async (token) => {
           // Create new tokens object
-          const newTokens: TwitterTokens = {
+          const newToken: AuthToken = {
             accessToken: token.accessToken,
-            refreshToken: token.refreshToken || tokens.refreshToken, // Use old refresh token if new one isn't provided
+            refreshToken: token.refreshToken || token.refreshToken, // Use old refresh token if new one isn't provided
             expiresAt: Date.now() + 7200 * 1000, // Twitter tokens typically expire in 2 hours
-            scope: tokens.scope,
+            scope: token.scope,
             tokenType: TokenType.OAUTH2,
           };
 
           // Save the new tokens
-          await this.tokenStorage.saveTokens(userId, newTokens, 'twitter');
+          await this.nearAuthService.saveTokens(userId, Platform.TWITTER, newToken);
         },
         onTokenRefreshError: async (error) => {
           console.error('Token refresh error:', error);
@@ -83,11 +85,21 @@ export class TwitterClient extends BasePlatformClient implements PlatformClient 
           // Handle specific Twitter API error for invalid token
           if (
             (error as any).data?.error === 'invalid_request' ||
+            (error as any).data?.error_description?.includes('invalid') ||
             ((error as any).status === 400 && (error as any).code === 'invalid_grant')
           ) {
-            await this.tokenStorage.deleteTokens(userId, 'twitter');
-            throw new Error('User authentication expired. Please reconnect your Twitter account.');
+            await this.nearAuthService.deleteTokens(userId, Platform.TWITTER);
+
+            // Throw a more descriptive error
+            throw new Error(
+              `User authentication expired (${
+                (error as any).data?.error_description || 'invalid token'
+              }). Please reconnect your Twitter account.`,
+            );
           }
+
+          // For other types of errors, provide more context
+          throw new Error(`Token refresh failed: ${(error as any).message || 'Unknown error'}`);
         },
       });
 
@@ -100,7 +112,7 @@ export class TwitterClient extends BasePlatformClient implements PlatformClient 
       }
 
       // Create a Twitter client with the access token and plugins
-      return new TwitterApi(tokens.accessToken, { plugins });
+      return new TwitterApi(token.accessToken, { plugins });
     } catch (error) {
       console.error('Error getting Twitter client:', error);
       throw error;
@@ -139,7 +151,7 @@ export class TwitterClient extends BasePlatformClient implements PlatformClient 
     code: string,
     redirectUri: string,
     codeVerifier?: string,
-  ): Promise<TwitterTokens> {
+  ): Promise<AuthToken> {
     const client = new TwitterApi({
       clientId: this.env.TWITTER_CLIENT_ID,
       clientSecret: this.env.TWITTER_CLIENT_SECRET,
@@ -156,7 +168,7 @@ export class TwitterClient extends BasePlatformClient implements PlatformClient 
     const { data: user } = await loggedClient.v2.me();
 
     // Create tokens object
-    const tokens: TwitterTokens = {
+    const token: AuthToken = {
       accessToken,
       refreshToken,
       expiresAt: Date.now() + expiresIn * 1000,
@@ -165,9 +177,9 @@ export class TwitterClient extends BasePlatformClient implements PlatformClient 
     };
 
     // Save the tokens
-    await this.tokenStorage.saveTokens(user.id, tokens, 'twitter');
+    await this.nearAuthService.saveTokens(user.id, Platform.TWITTER, token);
 
-    return tokens;
+    return token;
   }
 
   /**
@@ -177,7 +189,7 @@ export class TwitterClient extends BasePlatformClient implements PlatformClient 
    * @returns The new tokens from the platform
    * @throws PlatformError if the refresh fails
    */
-  async refreshPlatformToken(refreshToken: string): Promise<TwitterTokens> {
+  async refreshPlatformToken(refreshToken: string): Promise<AuthToken> {
     try {
       const client = new TwitterApi({
         clientId: this.env.TWITTER_CLIENT_ID,
@@ -198,11 +210,17 @@ export class TwitterClient extends BasePlatformClient implements PlatformClient 
       // Handle specific Twitter API error for invalid token
       if (
         error.data?.error === 'invalid_request' ||
+        error.data?.error_description?.includes('invalid') ||
         (error.status === 400 && error.code === 'invalid_grant')
       ) {
-        throw PlatformError.invalidToken(
-          'User authentication expired. Please reconnect your Twitter account.',
-          error,
+        throw new PlatformError(
+          `User authentication expired (${
+            error.data?.error_description || 'invalid token'
+          }). Please reconnect your Twitter account.`,
+          Platform.TWITTER,
+          ApiErrorCode.UNAUTHORIZED,
+          false, // Not recoverable
+          error, // Original error
         );
       }
 

@@ -1,0 +1,15 @@
+{
+  "name": "@crosspost/types",
+  "version": "0.1.0",
+  "exports": {
+    ".": "./mod.ts"
+  },
+  "publish": {
+    "include": [
+      "deno_dist/**/*",
+      "mod.ts",
+      "README.md",
+      "LICENSE"
+    ]
+  }
+}

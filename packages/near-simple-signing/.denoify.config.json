@@ -1,0 +1,19 @@
+{
+  "imports": {
+    "crypto": "node:crypto"
+  },
+  "ports": {
+    "Buffer.from": {
+      "deno": "new Uint8Array"
+    }
+  },
+  "entryPoints": [
+    "mod.ts"
+  ],
+  "transformers": [
+    {
+      "find": "import\\s+([^\\s]+)\\s+from\\s+['\"]([^'\"]+)['\"];",
+      "replace": "import $1 from \"$2.ts\";"
+    }
+  ]
+}

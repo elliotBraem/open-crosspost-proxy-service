@@ -6,10 +6,7 @@ export enum TokenType {
   OAUTH2 = 'oauth2',
 }
 
-/**
- * Twitter Tokens interface
- */
-export interface TwitterTokens {
+export interface AuthToken {
   accessToken: string;
   refreshToken?: string;
   tokenSecret?: string;
@@ -19,7 +16,7 @@ export interface TwitterTokens {
 }
 
 import { Env } from '../../config/env.ts';
-import { PlatformName } from '../../types/platform.types.ts';
+import { PlatformName } from '@crosspost/types';
 import { PrefixedKvStore } from '../../utils/kv-store.utils.ts';
 import { TokenAccessLogger, TokenOperation } from '../security/token-access-logger.ts';
 
@@ -28,19 +25,15 @@ import { TokenAccessLogger, TokenOperation } from '../security/token-access-logg
  * Handles secure storage and retrieval of OAuth tokens
  */
 export class TokenStorage {
-  private tokenStore: PrefixedKvStore;
-  private encryptionKey: string;
-  private logger: TokenAccessLogger;
-
   // Version constants for encryption
   private readonly ENCRYPTION_VERSION_1 = 0x01;
   private readonly CURRENT_ENCRYPTION_VERSION = this.ENCRYPTION_VERSION_1;
 
-  constructor(encryptionKey: string, env: Env) {
-    this.encryptionKey = encryptionKey;
-    this.logger = new TokenAccessLogger(env);
-    this.tokenStore = new PrefixedKvStore(['tokens']);
-  }
+  constructor(
+    private encryptionKey: string,
+    private tokenStore: PrefixedKvStore,
+    private logger: TokenAccessLogger,
+  ) {}
 
   /**
    * Get tokens for a user
@@ -49,14 +42,20 @@ export class TokenStorage {
    * @returns The user's tokens
    * @throws Error if tokens are not found
    */
-  async getTokens(userId: string, platform: PlatformName): Promise<TwitterTokens> {
+  async getTokens(userId: string, platform: PlatformName): Promise<AuthToken> {
     try {
       // Use platform-specific key with PrefixedKvStore
       const encryptedTokens = await this.tokenStore.get<string>([platform, userId]);
 
       if (!encryptedTokens) {
         await this.logger.logAccess(TokenOperation.GET, userId, false, 'Tokens not found');
-        throw new Error(`Tokens not found for user ${userId} on platform ${platform}`);
+
+        const error = new Error(`Tokens not found for user ${userId} on platform ${platform}`);
+        error.name = 'TokenNotFoundError';
+        (error as any).userId = userId;
+        (error as any).platform = platform;
+
+        throw error;
       }
 
       // Decrypt the tokens
@@ -75,7 +74,11 @@ export class TokenStorage {
         error instanceof Error ? error.message : 'Unknown error',
       );
       console.error('Error getting tokens:', error);
-      throw new Error('Failed to retrieve tokens');
+
+      const enhancedError = new Error('Failed to retrieve tokens');
+      enhancedError.name = 'TokenRetrievalError';
+
+      throw enhancedError;
     }
   }
 
@@ -85,7 +88,7 @@ export class TokenStorage {
    * @param tokens The tokens to save
    * @param platform The platform name (e.g., 'twitter')
    */
-  async saveTokens(userId: string, tokens: TwitterTokens, platform: PlatformName): Promise<void> {
+  async saveTokens(userId: string, tokens: AuthToken, platform: PlatformName): Promise<void> {
     try {
       // Encrypt the tokens
       const encryptedTokens = await this.encryptTokens(tokens);
@@ -167,7 +170,7 @@ export class TokenStorage {
    * @param tokens The tokens to encrypt
    * @returns The encrypted tokens
    */
-  private async encryptTokens(tokens: TwitterTokens): Promise<string> {
+  private async encryptTokens(tokens: AuthToken): Promise<string> {
     try {
       // Get the encryption key bytes
       const rawKeyData = new TextEncoder().encode(this.encryptionKey);
@@ -227,7 +230,7 @@ export class TokenStorage {
    * @param encryptedTokens The encrypted tokens
    * @returns The decrypted tokens
    */
-  private async decryptTokens(encryptedTokens: string): Promise<TwitterTokens> {
+  private async decryptTokens(encryptedTokens: string): Promise<AuthToken> {
     try {
       // Get the encryption key bytes
       const rawKeyData = new TextEncoder().encode(this.encryptionKey);

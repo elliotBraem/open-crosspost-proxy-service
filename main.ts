@@ -1,17 +1,31 @@
+import {
+  AccountActivityParamsSchema,
+  AccountActivityQuerySchema,
+  AccountPostsParamsSchema,
+  AccountPostsQuerySchema,
+  AuthCallbackQuerySchema,
+  AuthInitRequestSchema,
+  CreatePostRequestSchema,
+  DeletePostRequestSchema,
+  LeaderboardQuerySchema,
+  LikePostRequestSchema,
+  NearAuthorizationRequestSchema,
+  PlatformParamSchema,
+  QuotePostRequestSchema,
+  RateLimitEndpointParamSchema,
+  ReplyToPostRequestSchema,
+  RepostRequestSchema,
+  UnlikePostRequestSchema,
+} from '@crosspost/types';
 import { Hono } from './deps.ts';
 import { getSecureEnv, isProduction } from './src/config/env.ts';
 import { AuthMiddleware } from './src/middleware/auth.middleware.ts';
 import { corsMiddleware } from './src/middleware/cors.middleware.ts';
 import { errorMiddleware } from './src/middleware/error.middleware.ts';
-import { UsageRateLimitMiddleware } from './src/middleware/usage-rate-limit.middleware.ts';
 import { PlatformMiddleware } from './src/middleware/supported-platforms.middleware.ts';
-
-// Import controllers
-import { AuthController } from './src/controllers/auth.controller.ts';
-import { LeaderboardController } from './src/controllers/leaderboard.controller.ts';
-import { MediaController } from './src/controllers/media.controller.ts';
-import { PostController } from './src/controllers/post.controller.ts';
-import { RateLimitController } from './src/controllers/rate-limit.controller.ts';
+import { UsageRateLimitMiddleware } from './src/middleware/usage-rate-limit.middleware.ts';
+import { ValidationMiddleware } from './src/middleware/validation.middleware.ts';
+import { initializeApp } from './init.ts';
 
 // Create a new Hono app
 const app = new Hono();
@@ -20,12 +34,17 @@ const app = new Hono();
 app.use('*', errorMiddleware());
 app.use('*', corsMiddleware());
 
-// Initialize controllers
-const authController = new AuthController();
-const leaderboardController = new LeaderboardController();
-const postController = new PostController();
-const mediaController = new MediaController();
-const rateLimitController = new RateLimitController();
+// Initialize app and get dependencies
+const {
+  authController,
+  leaderboardController,
+  rateLimitController,
+  postControllers,
+  nearAuthService,
+} = initializeApp();
+
+// Initialize middleware with dependencies
+AuthMiddleware.initialize(nearAuthService);
 
 // Health check route
 app.get('/health', (c) => c.json({ status: 'ok' }));
@@ -40,6 +59,8 @@ const auth = new Hono();
 auth.post(
   '/:platform/login',
   PlatformMiddleware.validatePlatform(),
+  ValidationMiddleware.validateParams(PlatformParamSchema),
+  ValidationMiddleware.validateBody(AuthInitRequestSchema),
   AuthMiddleware.validateNearSignature(),
   (c) => {
     const platform = PlatformMiddleware.getPlatform(c);
@@ -50,6 +71,8 @@ auth.post(
 auth.get(
   '/:platform/callback',
   PlatformMiddleware.validatePlatform(),
+  ValidationMiddleware.validateParams(PlatformParamSchema),
+  ValidationMiddleware.validateQuery(AuthCallbackQuerySchema),
   (c) => {
     const platform = PlatformMiddleware.getPlatform(c);
     return authController.handleCallback(c, platform);
@@ -59,6 +82,7 @@ auth.get(
 auth.post(
   '/:platform/refresh',
   PlatformMiddleware.validatePlatform(),
+  ValidationMiddleware.validateParams(PlatformParamSchema),
   AuthMiddleware.validateNearSignature(),
   (c) => {
     const platform = PlatformMiddleware.getPlatform(c);
@@ -69,6 +93,7 @@ auth.post(
 auth.delete(
   '/:platform/revoke',
   PlatformMiddleware.validatePlatform(),
+  ValidationMiddleware.validateParams(PlatformParamSchema),
   AuthMiddleware.validateNearSignature(),
   (c) => {
     const platform = PlatformMiddleware.getPlatform(c);
@@ -79,6 +104,7 @@ auth.delete(
 auth.get(
   '/:platform/status',
   PlatformMiddleware.validatePlatform(),
+  ValidationMiddleware.validateParams(PlatformParamSchema),
   AuthMiddleware.validateNearSignature(),
   (c) => {
     const platform = PlatformMiddleware.getPlatform(c);
@@ -89,6 +115,7 @@ auth.get(
 auth.post(
   '/:platform/refresh-profile',
   PlatformMiddleware.validatePlatform(),
+  ValidationMiddleware.validateParams(PlatformParamSchema),
   AuthMiddleware.validateNearSignature(),
   (c) => {
     const platform = PlatformMiddleware.getPlatform(c);
@@ -105,12 +132,14 @@ auth.get(
 // Authorize a NEAR account
 auth.post(
   '/authorize/near',
+  ValidationMiddleware.validateBody(NearAuthorizationRequestSchema),
   AuthMiddleware.validateNearSignature(),
   (c) => authController.authorizeNear(c),
 );
 // Unauthorize a NEAR account
 auth.delete(
   '/unauthorize/near',
+  ValidationMiddleware.validateBody(NearAuthorizationRequestSchema),
   AuthMiddleware.validateNearSignature(),
   (c) => authController.unauthorizeNear(c),
 );
@@ -126,36 +155,45 @@ const post = new Hono();
 post.post(
   '/',
   AuthMiddleware.validateNearSignature(),
+  ValidationMiddleware.validateBody(CreatePostRequestSchema),
   UsageRateLimitMiddleware.limitByNearAccount('post'),
-  (c) => postController.createPost(c),
+  (c) => postControllers.create.handle(c),
 );
-post.post('/repost', AuthMiddleware.validateNearSignature(), (c) => postController.repost(c));
-post.post('/quote', AuthMiddleware.validateNearSignature(), (c) => postController.quotePost(c));
-post.delete('/:id', AuthMiddleware.validateNearSignature(), (c) => postController.deletePost(c));
-post.post('/reply', AuthMiddleware.validateNearSignature(), (c) => postController.replyToPost(c));
-post.post('/like/:id', AuthMiddleware.validateNearSignature(), (c) => postController.likePost(c));
+post.post(
+  '/repost',
+  AuthMiddleware.validateNearSignature(),
+  ValidationMiddleware.validateBody(RepostRequestSchema),
+  (c) => postControllers.repost.handle(c),
+);
+post.post(
+  '/quote',
+  AuthMiddleware.validateNearSignature(),
+  ValidationMiddleware.validateBody(QuotePostRequestSchema),
+  (c) => postControllers.quote.handle(c),
+);
+post.delete(
+  '/:id',
+  AuthMiddleware.validateNearSignature(),
+  ValidationMiddleware.validateBody(DeletePostRequestSchema),
+  (c) => postControllers.delete.handle(c),
+);
+post.post(
+  '/reply',
+  AuthMiddleware.validateNearSignature(),
+  ValidationMiddleware.validateBody(ReplyToPostRequestSchema),
+  (c) => postControllers.reply.handle(c),
+);
+post.post(
+  '/like/:id',
+  AuthMiddleware.validateNearSignature(),
+  ValidationMiddleware.validateBody(LikePostRequestSchema),
+  (c) => postControllers.like.handle(c),
+);
 post.delete(
   '/like/:id',
   AuthMiddleware.validateNearSignature(),
-  (c) => postController.unlikePost(c),
-);
-
-// Media routes
-const media = new Hono();
-media.post(
-  '/upload',
-  AuthMiddleware.validateNearSignature(),
-  (c) => mediaController.uploadMedia(c),
-);
-media.get(
-  '/status/:id',
-  AuthMiddleware.validateNearSignature(),
-  (c) => mediaController.getMediaStatus(c),
-);
-media.post(
-  '/:id/metadata',
-  AuthMiddleware.validateNearSignature(),
-  (c) => mediaController.updateMediaMetadata(c),
+  ValidationMiddleware.validateBody(UnlikePostRequestSchema),
+  (c) => postControllers.unlike.handle(c),
 );
 
 // Leaderboard routes
@@ -163,22 +201,26 @@ const leaderboard = new Hono();
 leaderboard.get(
   '/',
   AuthMiddleware.validateNearSignature(),
+  ValidationMiddleware.validateQuery(LeaderboardQuerySchema),
   (c) => leaderboardController.getLeaderboard(c),
 );
 leaderboard.get(
   '/:signerId',
   AuthMiddleware.validateNearSignature(),
+  ValidationMiddleware.validateParams(AccountActivityParamsSchema),
+  ValidationMiddleware.validateQuery(AccountActivityQuerySchema),
   (c) => leaderboardController.getAccountActivity(c),
 );
 leaderboard.get(
   '/:signerId/posts',
   AuthMiddleware.validateNearSignature(),
+  ValidationMiddleware.validateParams(AccountPostsParamsSchema),
+  ValidationMiddleware.validateQuery(AccountPostsQuerySchema),
   (c) => leaderboardController.getAccountPosts(c),
 );
 
 // Mount routes
 api.route('/post', post);
-api.route('/media', media);
 api.route('/leaderboard', leaderboard);
 api.route('/activity', leaderboard);
 app.route('/auth', auth);
@@ -188,6 +230,7 @@ const usageRateLimit = new Hono();
 usageRateLimit.get(
   '/:endpoint?',
   AuthMiddleware.validateNearSignature(),
+  ValidationMiddleware.validateParams(RateLimitEndpointParamSchema),
   (c) => rateLimitController.getUsageRateLimit(c),
 );
 api.route('/rate-limit', usageRateLimit);

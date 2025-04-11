@@ -2,9 +2,10 @@ import { Context } from '../../deps.ts';
 import { getEnv } from '../config/env.ts';
 import {
   ActivityTrackingService,
+  PlatformAccountActivity,
   TimePeriod,
 } from '../domain/services/activity-tracking.service.ts';
-import { PlatformName } from '../types/platform.types.ts';
+import { PlatformName } from '@crosspost/types';
 
 /**
  * Leaderboard Controller

@@ -2,7 +2,19 @@
  * Platform Media Interface
  * Defines the common interface for platform-specific media operations
  */
-import { MediaContent } from './platform-post.interface.ts';
+
+import { MediaContent } from '@crosspost/types';
+
+export interface MediaStatusResult {
+  mediaId: string;
+  state: string;
+  processingComplete: boolean;
+  progressPercent?: number;
+  error?: {
+    code: string;
+    message: string;
+  };
+}
 
 export interface MediaUploadResult {
   mediaId: string;
@@ -14,17 +26,6 @@ export interface MediaUploadResult {
       code: string;
       message: string;
     };
-  };
-}
-
-export interface MediaStatusResult {
-  mediaId: string;
-  state: string;
-  processingComplete: boolean;
-  progressPercent?: number;
-  error?: {
-    code: string;
-    message: string;
   };
 }
 

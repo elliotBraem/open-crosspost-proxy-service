@@ -1,4 +1,19 @@
+import { AuthToken } from '../../storage/auth-token-storage.ts';
 import { PlatformClient } from './platform-client.interface.ts';
+
+/**
+ * Auth State Interface
+ * Defines the structure for storing OAuth state data
+ */
+export interface AuthState {
+  redirectUri: string;
+  codeVerifier: string;
+  state: string;
+  createdAt: number;
+  successUrl: string; // Store the original client return URL
+  errorUrl: string; // Store the URL to redirect to on error
+  signerId: string; // Store the NEAR account ID for linking
+}
 
 /**
  * Platform Auth Interface
@@ -8,20 +23,14 @@ import { PlatformClient } from './platform-client.interface.ts';
 export interface PlatformAuth {
   /**
    * Initialize the authentication process
-   * @param signerId NEAR account ID for linking
-   * @param redirectUri The redirect URI for the OAuth callback
+   * @param redirectUri The redirect URI for the OAuth callback (platform specific, internal url)
    * @param scopes The requested OAuth scopes
-   * @param successUrl The URL to redirect to on successful authentication
-   * @param errorUrl The URL to redirect to on authentication failure
-   * @returns The authentication URL and state
+   * @returns The authentication URL and state, and optional codeVerifier (PKCE)
    * @throws PlatformError if the initialization fails
    */
   initializeAuth(
-    signerId: string,
     redirectUri: string,
     scopes: string[],
-    successUrl?: string,
-    errorUrl?: string,
   ): Promise<{ authUrl: string; state: string; codeVerifier?: string }>;
 
   /**
@@ -44,7 +53,7 @@ export interface PlatformAuth {
   handleCallback(
     code: string,
     state: string,
-  ): Promise<{ userId: string; tokens: any; successUrl: string }>;
+  ): Promise<{ userId: string; token: AuthToken; successUrl: string }>;
 
   /**
    * Refresh a user's access token
@@ -53,7 +62,7 @@ export interface PlatformAuth {
    * @returns The new tokens
    * @throws PlatformError if the refresh fails
    */
-  refreshToken(userId: string): Promise<any>;
+  refreshToken(userId: string): Promise<AuthToken>;
 
   /**
    * Revoke a user's tokens

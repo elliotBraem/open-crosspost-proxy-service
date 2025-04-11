@@ -4,10 +4,10 @@ import {
   MediaUploadResult,
   PlatformMedia,
 } from '../abstract/platform-media.interface.ts';
-import { MediaContent } from '../abstract/platform-post.interface.ts';
 import { TwitterClient } from './twitter-client.ts';
 import { Env } from '../../../config/env.ts';
 import { Buffer } from 'node:buffer';
+import { MediaContent } from '@crosspost/types';
 
 // Media upload limitations
 const MEDIA_LIMITS = {
@@ -27,9 +27,9 @@ export class TwitterMedia implements PlatformMedia {
   private twitterClient: TwitterClient;
   private oauth1Client: TwitterApi | null = null;
 
-  constructor(env: Env) {
+  constructor(env: Env, twitterClient: TwitterClient) {
     this.env = env;
-    this.twitterClient = new TwitterClient(env);
+    this.twitterClient = twitterClient;
 
     // Initialize OAuth 1.0a client for media uploads if credentials are provided
     if (
@@ -96,7 +96,7 @@ export class TwitterMedia implements PlatformMedia {
 
       // Set alt text if provided
       if (media.altText && mediaId) {
-        await this.updateMediaMetadata(userId, mediaId, media.altText);
+        await this.updateMediaMetadata(mediaId, media.altText);
       }
 
       return {
@@ -123,11 +123,10 @@ export class TwitterMedia implements PlatformMedia {
 
   /**
    * Get the status of a media upload
-   * @param userId The user ID who uploaded the media
    * @param mediaId The ID of the media to check
    * @returns The media status result
    */
-  async getMediaStatus(userId: string, mediaId: string): Promise<MediaStatusResult> {
+  async getMediaStatus(mediaId: string): Promise<MediaStatusResult> {
     try {
       // Check if OAuth 1.0a client is available
       if (!this.oauth1Client) {
@@ -164,12 +163,11 @@ export class TwitterMedia implements PlatformMedia {
 
   /**
    * Update media metadata (e.g., alt text)
-   * @param userId The user ID updating the media
    * @param mediaId The ID of the media to update
    * @param altText The alt text to set for the media
    * @returns True if the update was successful
    */
-  async updateMediaMetadata(userId: string, mediaId: string, altText: string): Promise<boolean> {
+  async updateMediaMetadata(mediaId: string, altText: string): Promise<boolean> {
     try {
       // Check if OAuth 1.0a client is available
       if (!this.oauth1Client) {
